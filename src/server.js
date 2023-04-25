@@ -1,5 +1,6 @@
 import http from "http";
-import SocketIO from "socket.io";
+import { Server } from "socket.io";
+import { instrument } from "@socket.io/admin-ui";
 import express from "express";
 
 const app = express();
@@ -11,7 +12,16 @@ app.get("/", (req, res) => res.render("home"));
 app.get("/*", (req, res) => res.redirect("/"));
 
 const httpServer = http.createServer(app);
-const wsServer = SocketIO(httpServer);
+const wsServer = new Server(httpServer, {
+  cors: {
+    origin: ["https://admin.socket.io"],
+    credentials: true,
+  },
+});
+
+instrument(wsServer, {
+  auth: false,
+});
 
 function publicRooms() {
   const {
@@ -19,6 +29,7 @@ function publicRooms() {
       adapter: { sids, rooms },
     },
   } = wsServer;
+
   const publicRooms = [];
   rooms.forEach((_, key) => {
     if (sids.get(key) === undefined) {
@@ -39,8 +50,8 @@ wsServer.on("connection", (socket) => {
     console.log(`Socket Event: ${event}`);
   });
   socket.on("enter_room", (roomName, done) => {
-    done();
     socket.join(roomName);
+    done();
     socket.to(roomName).emit("welcome", socket.nickname, countRoom(roomName));
     wsServer.sockets.emit("room_change", publicRooms());
   });
